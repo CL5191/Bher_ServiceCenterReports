@@ -213,3 +213,44 @@ function Get-QueueCallRecords {
 
     return $results
 }
+
+function Resolve-UserDisplayNameMap {
+    param(
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [string[]]$UserIds,
+
+        [Parameter(Mandatory = $true)]
+        [hashtable]$GraphConfig
+    )
+
+    $resolved = @{}
+    if (-not $UserIds -or $UserIds.Count -eq 0) {
+        return $resolved
+    }
+
+    $distinctIds = @($UserIds | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+    foreach ($userId in $distinctIds) {
+        try {
+            $uri = "https://graph.microsoft.com/v1.0/users/$userId?`$select=id,displayName,userPrincipalName"
+            $user = Invoke-GraphWithRetry -Method GET -Uri $uri -GraphConfig $GraphConfig
+            $label = $null
+            if ($user.displayName) {
+                $label = [string]$user.displayName
+            }
+            elseif ($user.userPrincipalName) {
+                $label = [string]$user.userPrincipalName
+            }
+
+            # Only return usable labels. Do not map unresolved identities back to raw GUIDs.
+            if (-not [string]::IsNullOrWhiteSpace($label) -and $label -ne [string]$userId) {
+                $resolved[$userId] = $label
+            }
+        }
+        catch {
+            continue
+        }
+    }
+
+    return $resolved
+}

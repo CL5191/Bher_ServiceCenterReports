@@ -57,6 +57,30 @@ try {
         Write-ReportLog -LogFile $run.LogFile -Level WARN -Message "No qualifying inbound non-zero-duration calls found in the selected window."
     }
 
+    $missingAgentIds = @(
+        $detailRows |
+        Where-Object { $_.Answered -eq $true -and $_.AgentId -and [string]::IsNullOrWhiteSpace([string]$_.AgentName) } |
+        Select-Object -ExpandProperty AgentId -Unique
+    )
+    if ($missingAgentIds.Count -gt 0) {
+        $agentNameMap = Resolve-UserDisplayNameMap -UserIds $missingAgentIds -GraphConfig $config.Graph
+        $resolvedCount = 0
+        foreach ($row in $detailRows) {
+            if ($row.Answered -eq $true -and $row.AgentId -and [string]::IsNullOrWhiteSpace([string]$row.AgentName) -and $agentNameMap.ContainsKey([string]$row.AgentId)) {
+                $mappedName = [string]$agentNameMap[[string]$row.AgentId]
+                if (-not [string]::IsNullOrWhiteSpace($mappedName)) {
+                    $row.AgentName = $mappedName
+                    $resolvedCount++
+                }
+            }
+        }
+        $unresolvedCount = $missingAgentIds.Count - $resolvedCount
+        Write-ReportLog -LogFile $run.LogFile -Message "Resolved display names for $resolvedCount of $($missingAgentIds.Count) previously unnamed answering agents."
+        if ($unresolvedCount -gt 0) {
+            Write-ReportLog -LogFile $run.LogFile -Level WARN -Message "Could not resolve $unresolvedCount answering agent IDs to user display names."
+        }
+    }
+
     $queueSummary = Get-QueueSummary -MetricRows $detailRows
     $agentSummary = Get-AgentSummary -MetricRows $detailRows
 

@@ -95,6 +95,113 @@ function Get-FallbackAnswerSegment {
         Select-Object -First 1
 }
 
+function Test-IsLikelyServiceIdentity {
+    param(
+        [string]$Name
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Name)) {
+        return $false
+    }
+
+    return [bool]($Name -match '(?i)\b(console|operator|auto\s*attendant|resource|service|bot|queue|cq)\b')
+}
+
+function Get-PreferredAgentIdentityFromSegment {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Segment,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$QueueIds
+    )
+
+    $candidates = @()
+
+    if ($Segment.Callee -and -not ($QueueIds -contains $Segment.Callee)) {
+        $candidates += [PSCustomObject]@{
+            Id = $Segment.Callee
+            Name = $Segment.CalleeName
+            IsService = (Test-IsLikelyServiceIdentity -Name $Segment.CalleeName)
+            Preference = 2
+        }
+    }
+
+    if ($Segment.Caller -and -not ($QueueIds -contains $Segment.Caller)) {
+        $candidates += [PSCustomObject]@{
+            Id = $Segment.Caller
+            Name = $Segment.CallerName
+            IsService = (Test-IsLikelyServiceIdentity -Name $Segment.CallerName)
+            Preference = 1
+        }
+    }
+
+    if (-not $candidates -or $candidates.Count -eq 0) {
+        return $null
+    }
+
+    # Prefer non-service identities with names; then prefer callee over caller.
+    $preferred = $candidates |
+        Sort-Object @{ Expression = { if ($_.IsService) { 1 } else { 0 } } }, @{ Expression = { if ([string]::IsNullOrWhiteSpace($_.Name)) { 1 } else { 0 } } }, @{ Expression = { -$_.Preference } } |
+        Select-Object -First 1
+
+    return $preferred
+}
+
+function Get-BestFallbackAgentSegment {
+    param(
+        [Parameter(Mandatory = $true)]
+        [array]$Segments,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$QueueIds,
+
+        [Parameter(Mandatory = $true)]
+        [datetime]$InboundStart,
+
+        [int]$MinDurationSeconds = 10
+    )
+
+    $candidates = $Segments |
+        Where-Object {
+            [datetime]$_.Start -ge $InboundStart -and
+            (Get-SegmentDurationSeconds -Segment $_) -ge $MinDurationSeconds -and
+            -not (
+                ($_.Caller -and ($QueueIds -contains $_.Caller)) -or
+                ($_.Callee -and ($QueueIds -contains $_.Callee))
+            ) -and
+            (
+                ($_.Caller -and -not ($QueueIds -contains $_.Caller)) -or
+                ($_.Callee -and -not ($QueueIds -contains $_.Callee))
+            )
+        } |
+        Sort-Object Start
+
+    if (-not $candidates -or $candidates.Count -eq 0) {
+        return $null
+    }
+
+    # First choice: segment whose preferred identity looks like a human (non-service)
+    # and has a concrete name in call records.
+    foreach ($segment in $candidates) {
+        $identity = Get-PreferredAgentIdentityFromSegment -Segment $segment -QueueIds $QueueIds
+        if ($identity -and -not $identity.IsService -and -not [string]::IsNullOrWhiteSpace([string]$identity.Name)) {
+            return $segment
+        }
+    }
+
+    # Second choice: non-service identity even if name is missing.
+    foreach ($segment in $candidates) {
+        $identity = Get-PreferredAgentIdentityFromSegment -Segment $segment -QueueIds $QueueIds
+        if ($identity -and -not $identity.IsService) {
+            return $segment
+        }
+    }
+
+    # Fallback: earliest candidate segment.
+    return $candidates | Select-Object -First 1
+}
+
 function Test-VoicemailCall {
     param(
         [Parameter(Mandatory = $true)]
@@ -154,7 +261,7 @@ function Convert-CallRecordToMetricRow {
     $answeredByFallback = $false
 
     if (-not $agentSegment -and -not $isVoicemail) {
-        $agentSegment = Get-FallbackAnswerSegment -Segments $segments -QueueIds $QueueIds -InboundStart ([datetime]$incomingToQueue.Start)
+        $agentSegment = Get-BestFallbackAgentSegment -Segments $segments -QueueIds $QueueIds -InboundStart ([datetime]$incomingToQueue.Start)
         $answeredByFallback = $null -ne $agentSegment
     }
 
@@ -180,13 +287,10 @@ function Convert-CallRecordToMetricRow {
             }
         }
 
-        if ($agentSegment.Callee -and -not ($QueueIds -contains $agentSegment.Callee)) {
-            $agentId = $agentSegment.Callee
-            $agentName = $agentSegment.CalleeName
-        }
-        elseif ($agentSegment.Caller -and -not ($QueueIds -contains $agentSegment.Caller)) {
-            $agentId = $agentSegment.Caller
-            $agentName = $agentSegment.CallerName
+        $preferredIdentity = Get-PreferredAgentIdentityFromSegment -Segment $agentSegment -QueueIds $QueueIds
+        if ($preferredIdentity) {
+            $agentId = $preferredIdentity.Id
+            $agentName = $preferredIdentity.Name
         }
     }
 
