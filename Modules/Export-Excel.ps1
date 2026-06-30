@@ -63,8 +63,12 @@ function Export-ReportWorkbook {
     $QueueSummary | Export-Excel -Path $WorkbookPath -WorksheetName "QueueSummary" -TableName "QueueSummary" -AutoSize -AutoFilter -Append
     $AgentSummary | Export-Excel -Path $WorkbookPath -WorksheetName "AgentSummary" -TableName "AgentSummary" -AutoSize -AutoFilter -Append
 
-    $chartDefBar = New-ExcelChartDefinition -Title "Queue Volume" -ChartType ColumnClustered -XRange QueueSummary[QueueName] -YRange QueueSummary[Offered],QueueSummary[Answered],QueueSummary[Abandoned] -NoLegend:$false
-    $chartDefPie = New-ExcelChartDefinition -Title "Answered vs Voicemail vs Abandoned" -ChartType Pie -XRange QueueSummary[QueueName] -YRange QueueSummary[Answered] -NoLegend:$false
+    $lastDataRow = $QueueSummary.Count + 1
+    $chartRow = $lastDataRow + 2
+
+    $chartDefBar = New-ExcelChartDefinition -Title "Queue Volume" -ChartType ColumnClustered -XRange QueueSummary[QueueName] -YRange QueueSummary[Offered],QueueSummary[Answered],QueueSummary[Abandoned] -SeriesHeader "Offered","Answered","Abandoned" -Row $chartRow -Column 1 -Width 640 -Height 320 -NoLegend:$false
+    # Place the second chart one worksheet column away from the first chart's footprint.
+    $chartDefPie = New-ExcelChartDefinition -Title "Answered vs Voicemail vs Abandoned" -ChartType Pie -XRange QueueSummary[QueueName] -YRange QueueSummary[Answered] -Row $chartRow -Column 10 -Width 520 -Height 320 -NoLegend:$false
 
     Export-Excel -Path $WorkbookPath -WorksheetName "QueueSummary" -ExcelChartDefinition $chartDefBar -Append
     Export-Excel -Path $WorkbookPath -WorksheetName "QueueSummary" -ExcelChartDefinition $chartDefPie -Append
