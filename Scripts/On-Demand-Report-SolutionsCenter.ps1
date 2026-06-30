@@ -110,9 +110,14 @@ try {
     }
 
     if (-not $SkipEmail) {
+        $emailConfig = $config.Email.Clone()
+        if ($config.EmailGroups -and $config.EmailGroups.SolutionsCenter) {
+            $emailConfig.ToRecipients = @($config.EmailGroups.SolutionsCenter)
+        }
+
         $subject = "{0} - Solutions Center On Demand ({1})" -f $config.Email.SubjectPrefix, $stamp
         $body = "<p>Attached are the Solutions Center on-demand reports for <b>$stamp</b>.</p><p>Run ID: $($run.RunId)</p>"
-        Send-ReportEmail -EmailConfig $config.Email -Subject $subject -BodyHtml $body -AttachmentPaths @($finalXlsxPath, $finalPdfPath) -GraphConfig $config.Graph
+        Send-ReportEmail -EmailConfig $emailConfig -Subject $subject -BodyHtml $body -AttachmentPaths @($finalXlsxPath, $finalPdfPath) -GraphConfig $config.Graph
     }
 
     Write-ReportLog -LogFile $run.LogFile -Message "Solutions Center on-demand report run completed. Output: $finalXlsxPath, $finalPdfPath"

@@ -20,8 +20,13 @@ $Script:ReportConfig = @{
 
     Email = @{
         SenderMailbox = "chad_logan@mascohq.com"
-        ToRecipients  = @("chad_logan@mascohq.com")
+        ToRecipients  = @("MASCO_SG_Behr_TeamsServiceCenterReporting@mascohq.com")
         SubjectPrefix = "Service Center Call Queue Report"
+    }
+
+    EmailGroups = @{
+        StandardReports  = @("MASCO_SG_Behr_TeamsServiceCenterReporting@mascohq.com")
+        SolutionsCenter  = @("MASCO_SG_Behr_TeamsSolutionCenterReporting@mascohq.com")
     }
 
     Files = @{
