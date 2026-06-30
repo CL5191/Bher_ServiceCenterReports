@@ -64,6 +64,37 @@ function Get-AnsweringAgentSegment {
         Select-Object -First 1
 }
 
+function Get-FallbackAnswerSegment {
+    param(
+        [Parameter(Mandatory = $true)]
+        [array]$Segments,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$QueueIds,
+
+        [Parameter(Mandatory = $true)]
+        [datetime]$InboundStart,
+
+        [int]$MinDurationSeconds = 10
+    )
+
+    return $Segments |
+        Where-Object {
+            [datetime]$_.Start -ge $InboundStart -and
+            (Get-SegmentDurationSeconds -Segment $_) -ge $MinDurationSeconds -and
+            -not (
+                ($_.Caller -and ($QueueIds -contains $_.Caller)) -or
+                ($_.Callee -and ($QueueIds -contains $_.Callee))
+            ) -and
+            (
+                ($_.Caller -and -not ($QueueIds -contains $_.Caller)) -or
+                ($_.Callee -and -not ($QueueIds -contains $_.Callee))
+            )
+        } |
+        Sort-Object Start |
+        Select-Object -First 1
+}
+
 function Test-VoicemailCall {
     param(
         [Parameter(Mandatory = $true)]
@@ -120,6 +151,12 @@ function Convert-CallRecordToMetricRow {
 
     $isVoicemail = Test-VoicemailCall -Call $Call
     $agentSegment = Get-AnsweringAgentSegment -Segments $segments -QueueId $QueueId -QueueIds $QueueIds -InboundStart ([datetime]$incomingToQueue.Start)
+    $answeredByFallback = $false
+
+    if (-not $agentSegment -and -not $isVoicemail) {
+        $agentSegment = Get-FallbackAnswerSegment -Segments $segments -QueueIds $QueueIds -InboundStart ([datetime]$incomingToQueue.Start)
+        $answeredByFallback = $null -ne $agentSegment
+    }
 
     $answered = $false
     $answerTime = $null
@@ -132,6 +169,9 @@ function Convert-CallRecordToMetricRow {
         $answered = $true
         $answerTime = [datetime]$agentSegment.Start
         $waitSeconds = [Math]::Round(($answerTime - [datetime]$incomingToQueue.Start).TotalSeconds, 0)
+        if ($waitSeconds -lt 0) {
+            $waitSeconds = 0
+        }
 
         if ($callEnd) {
             $handleSeconds = [Math]::Round(($callEnd - $answerTime).TotalSeconds, 0)
@@ -180,6 +220,7 @@ function Convert-CallRecordToMetricRow {
         AnsweredUnderSLA   = ($answered -and $waitSeconds -le $SlaSeconds)
         Voicemail          = $voicemail
         Abandoned          = $abandoned
+        AnsweredByFallback = $answeredByFallback
     }
 }
 
