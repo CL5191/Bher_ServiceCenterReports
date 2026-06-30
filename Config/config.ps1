@@ -19,8 +19,8 @@ $Script:ReportConfig = @{
     }
 
     Email = @{
-        SenderMailbox = "shared-mailbox@contoso.com"
-        ToRecipients  = @("service-center-reports@contoso.com")
+        SenderMailbox = "chad_logan@mascohq.com"
+        ToRecipients  = @("chad_logan@mascohq.com")
         SubjectPrefix = "Service Center Call Queue Report"
     }
 

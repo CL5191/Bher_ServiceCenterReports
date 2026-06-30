@@ -79,7 +79,7 @@ function Invoke-GraphWithRetry {
         [Parameter(Mandatory = $true)]
         [string]$Uri,
 
-        [hashtable]$Body,
+        [object]$Body,
 
         [Parameter(Mandatory = $true)]
         [hashtable]$GraphConfig
@@ -91,7 +91,13 @@ function Invoke-GraphWithRetry {
     while ($true) {
         try {
             if ($Method -eq "POST") {
-                return Invoke-MgGraphRequest -Method $Method -Uri $Uri -Body $Body -ContentType "application/json"
+                $requestBody = $Body
+                if ($null -ne $Body -and $Body -isnot [string]) {
+                    # Normalize nested hashtables/arrays into raw JSON to avoid SDK serialization edge cases.
+                    $requestBody = $Body | ConvertTo-Json -Depth 32 -Compress
+                }
+
+                return Invoke-MgGraphRequest -Method $Method -Uri $Uri -Body $requestBody -ContentType "application/json"
             }
 
             return Invoke-MgGraphRequest -Method $Method -Uri $Uri
