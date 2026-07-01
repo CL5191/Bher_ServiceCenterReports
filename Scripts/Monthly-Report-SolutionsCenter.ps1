@@ -62,6 +62,12 @@ try {
         Write-ReportLog -LogFile $run.LogFile -Level WARN -Message "No qualifying inbound non-zero-duration calls found in the selected window."
     }
 
+    foreach ($row in $detailRows) {
+        if ($row.Answered -ne $true) {
+            $row.AgentName = "Abandoned/VM"
+        }
+    }
+
     $missingAgentIds = @(
         $detailRows |
         Where-Object { $_.Answered -eq $true -and $_.AgentId -and [string]::IsNullOrWhiteSpace([string]$_.AgentName) } |
