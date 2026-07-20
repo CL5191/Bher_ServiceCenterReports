@@ -129,6 +129,18 @@ Use helper script to print `Az.Automation` commands for monthly day-1 6:00 AM sc
 pwsh ./Scheduled-Tasks/Install-AzureAutomationSchedule.ps1 -ResourceGroupName <rg> -AutomationAccountName <account>
 ```
 
+## Deployment workflow
+
+For the complete end-to-end process (PC changes -> `dev` -> `main` -> VM pull/deploy), see:
+
+- `PROD-Update-Workflow.md`
+
+VM helper scripts:
+
+- `Deploy-Prod.ps1` (pull latest `main` or deploy a specific tag)
+- `Rollback-Prod.ps1` (rollback to a previous tag or commit)
+- `Finalize-Prod-Update.ps1` (switch back to `main` after rollback test and append deployment audit history)
+
 ## Notes
 
 - `AAGraphreport.ps1` is unchanged and can be retained as legacy reference.
