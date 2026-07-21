@@ -105,7 +105,7 @@ try {
         }
     }
 
-    $queueSummary = Get-QueueSummary -MetricRows $detailRows
+    $queueSummary = Get-QueueSummary -MetricRows $detailRows -AllQueueNames @($queueMap.Values)
     $agentSummary = Get-AgentSummary -MetricRows $detailRows
 
     if (-not (Test-Path -LiteralPath $config.Reporting.ReportsPath)) {
